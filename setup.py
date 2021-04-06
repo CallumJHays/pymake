@@ -4,7 +4,7 @@ setup(
     name='pymake',
     version='0.0.1',
 
-    description='A flexible alternative to Makefiles',
+    description='The power of Makefiles with the flexibility of Python',
     classifiers=[
         #   3 - Alpha
         #   4 - Beta
@@ -16,9 +16,9 @@ setup(
         # Pick your license as you wish (should match "license" above)
         'License :: OSI Approved :: MIT License',
     ],
-        # Specify the Python versions you support here. In particular, ensure
-        # that you indicate whether you support Python 2, Python 3 or both.
-        # 'Programming Language :: Python :: 3 :: Only'],
+    # Specify the Python versions you support here. In particular, ensure
+    # that you indicate whether you support Python 2, Python 3 or both.
+    # 'Programming Language :: Python :: 3 :: Only'],
 
     # project_urls={
     #     #'Documentation': 'https://petercorke.github.io/bdsim',
@@ -32,10 +32,10 @@ setup(
     keywords='Makefile build-system docker task-runner',
     license='MIT',
     python_requires='>=3.6',
-    packages=['pymake'],
-    entry_points={
-        'console_scripts': [
-            'pymake=pymake:run'
-        ]
-    }
+    py_modules=['pymake'],
+    install_requires=['click'],
+    entry_points='''
+        [console_scripts]
+        pymake=pymake:cli
+    ''',
 )

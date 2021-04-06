@@ -1,8 +1,0 @@
-setup.py
-pymake/__init__.py
-pymake/pymake.py
-pymake.egg-info/PKG-INFO
-pymake.egg-info/SOURCES.txt
-pymake.egg-info/dependency_links.txt
-pymake.egg-info/entry_points.txt
-pymake.egg-info/top_level.txt

@@ -1,4 +1,5 @@
-from typing import Any, Callable, Dict, Iterable, Union, Optional, ModuleType, List, Awaitable, TypeVar, Tuple, cast, overload, Type
+from importlib import import_module
+from typing import Any, Callable, Dict, Iterable, Set, Union, Optional, List, TypeVar, Tuple, overload
 from pathlib import Path
 from abc import ABC, abstractmethod
 import json
@@ -8,12 +9,15 @@ from subprocess import check_output
 import logging
 import time
 import inspect
+import click
 
 __all__ = [
     'FilePath', 'Dependency', 'Dependencies',
     'Target', 'CacheStamped', 'File', 'Compile', 'Makefile',
-    'makes', 'writes', 'depends', 'command'
+    'makes', 'match', 'run', 'run_async'
 ]
+
+here = Path(__file__)
 
 FilePath = Union[str, Path]  # includes directories
 Dependency = Union[FilePath, 'Target']
@@ -71,6 +75,11 @@ class FileTarget(Target):
     def edited(self):
         return self.target.stat().st_mtime
 
+    def matches(self, query: FilePath) -> Optional[str]:
+        # TODO: glob matching
+        match = None
+        return match
+
 
 class Compile(FileTarget):
     def make(self):
@@ -92,73 +101,63 @@ class Makefile(FileTarget):
         sh(f"make --directory={self.makefile} -j{Context.n_workers}")
 
 
-T = TypeVar('T')
-Tgt = TypeVar('Tgt')
+# the string that matches the % for any @makes fn
+match: Optional[str] = None
+
+
+MakesFn = Union[
+    Callable[[str], None],
+    Callable[[], None]
+]
 
 
 @overload
-def makes(out: FilePath, deps: Dependencies = []) -> Callable[[Callable[[FilePath, Dependencies], None]], FileTarget]:
+def makes(out: FilePath, deps: Dependencies = []) -> Callable[[MakesFn], FileTarget]:
     ...
 
 
 @overload
-def makes(out: None, deps: Dependencies = []) -> Callable[[Callable[[Dependencies], None]], CacheStamped]:
+def makes(out: None, deps: Dependencies) -> Callable[[MakesFn], CacheStamped]:
     ...
 
 
 @overload
-def makes(out: None, deps: None) -> Callable[[Callable[[], None]], Command]:
+def makes(out: None, deps: None) -> Callable[[MakesFn], Command]:
     ...
 
 
-def makes(out: Optional[FilePath] = None, deps: Dependencies = []):  # type: ignore
+def makes(out: Optional[FilePath], deps: Dependencies = []):  # type: ignore
     def inner(fn: Callable[..., None]):
         Base = FileTarget if out \
             else CacheStamped if deps \
             else Command
 
         n_args = len(inspect.getargspec(fn).args)
-        assert n_args < 3, "too many arguments for decorated function."
+        assert n_args < 2, "too many arguments for decorated function."
 
         class Fn(Base):  # type: ignore
             __name__ = "Fn_" + fn.__name__
 
             def make(self):
-                if n_args == 2:
-                    fn(out, deps)
-                elif n_args == 1:
-                    fn(deps)
+                if n_args == 1:
+                    fn(match)
                 else:
                     fn()
-
-                fn(out, deps)
 
         return Fn()  # type: ignore
     return inner
 
 
-async def run_async(
-    makefile: ModuleType,
-    target: Dependency,
+async def make_async(
+    target: Target,
+    *,
     cache_path: Optional[str] = '.pymake-cache',
     n_workers: int = 4
 ):
     assert n_workers > 0
     Context.n_workers = n_workers
-
-    path2target: Dict[str, Target] = {}
-    for name in dir(makefile):
-        dep = getattr(makefile, name)
-        if not isinstance(dep, Target):
-            continue
-
-        if isinstance(dep, CacheStamped):
-            dep.name = name
-
-        # if the dep is a file also register the absolute filepath
-        # use absolute to work better with external PyMakefiles
-        if isinstance(dep, FileTarget):
-            path2target[str(dep.target.absolute())] = dep
+    # secs of previous make time at which to use a worker instead of main process
+    USE_WORKER_THRESHOLD = 0.5
 
     try:
         if cache_path is not None:
@@ -166,24 +165,26 @@ async def run_async(
     except:
         pass
 
-    if not isinstance(target, Target):
-        abs_target_path = str(Path(target).absolute())
-        try:
-            target = path2target[abs_target_path]
-        except KeyError as e:
-            raise e  # TODO: helpful error message (levenshtein distance)
-
     with ProcessPoolExecutor(n_workers) as executor:
         loop = asyncio.get_event_loop()
-        target2future: Dict[Target, Awaitable[Any]] = {}
+        scheduled: Set[Target] = set()
 
         async def ensure_remake(target: Target):
-            if target not in target2future:
-                target2future[target] = fut = loop.run_in_executor(
-                    executor,
-                    with_duration(target.make)
-                )
-                duration, _ = await fut
+            if target not in scheduled:
+                scheduled.add(target)
+                duration = Context.durations.get(target)
+                timed_make = with_duration(target.make)
+
+                # should we use a subprocess? what would be faster?
+                # assume that most makes take more than the threshold
+                use_subprocess = duration is None or duration > USE_WORKER_THRESHOLD
+                if use_subprocess:
+                    duration, _ = await loop.run_in_executor(
+                        executor,
+                        timed_make
+                    )
+                else:
+                    duration, _ = timed_make()
                 Context.durations[target] = duration
 
         async def maybe_remake(target: Target) -> bool:
@@ -227,17 +228,87 @@ async def run_async(
             Context.write_cache(cache_path)
 
 
-def run(makefile: ModuleType, target: Dependency, n_workers: int = 4):
+def make(
+    target: Target,
+    *,
+    cache_path: Optional[str] = '.pymake-cache',
+    n_workers: int = 4,
+):
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_async(makefile, target, n_workers=n_workers))
+    loop.run_until_complete(make_async(
+        target,
+        cache_path=cache_path,
+        n_workers=n_workers
+    ))
 
 
 def sh(
     script: str,
-    shell_exec: str = '/usr/bin/bash -c "{}"'
+    shell_exec: str = '/usr/bin/bash -c "{}"',
+    cwd: Path = here
 ) -> Optional[bytes]:
-    output = check_output(shell_exec.format(script), shell=True)
+    output = check_output(shell_exec.format(script), shell=True, cwd=cwd)
     return output if any(output) else None
+
+
+STANDARD_MAKEFILE = Path('PyMakefile.py')
+
+
+class NoTargetMatchError(Exception):
+    pass
+
+
+class MultipleTargetsMatchError(Exception):
+    pass
+
+
+@click.command()
+@click.argument("request")
+@click.argument("--makefile", "-m", default='PyMakefile.py')
+@click.argument("--cache", "-c", default='.pymake-cache')
+@click.argument("--n-workers", "-j", default=4)
+def run(
+    request: str,
+    makefile: str = 'PyMakefile.py',
+    cache_path: str = '.pymake-cache',
+    n_workers: int = 4
+):
+    "Run the makefile as a command-line app, handling arguments correctly"
+
+    module = import_module(makefile)
+
+    try:
+        target = getattr(module, request)
+        assert isinstance(target, Target), \
+            f"Expected requested target to be of class Target, but instead found {target.__class__}"
+
+    except AttributeError:
+        # no target was matched directly.
+        # Perhaps this will match the output of a FileTarget?
+        matching: Set[Target] = set()
+        for name in dir(module):
+            export = getattr(module, name)
+            if isinstance(export, FileTarget):
+                match = export.matches(request)
+                if match:
+                    matching.add(export)
+
+        if not any(matching):
+            # TODO: levenshtein debugging assistance
+            raise NoTargetMatchError(
+                f"No targets matches the request '{request}'")
+        elif len(matching) > 1:
+            raise MultipleTargetsMatchError(
+                f"Multiple targets match the request '{request}':\n" +
+                "\n".join(f"    - {match}" for match in matching)
+            )
+        else:
+            target = matching.pop()
+
+    make(target, cache_path=cache_path, n_workers=n_workers)
+
+
+T = TypeVar('T')
 
 
 def with_duration(fn: Callable[..., T]) -> Callable[..., Tuple[float, T]]:
@@ -259,7 +330,7 @@ class Context:
     timestamps: Dict[CacheStamped, float]
     durations: Dict[Target, float]
 
-    @classmethod
+    @ classmethod
     def write_cache(cls, path: FilePath):
         with open(path, 'w') as f:
             json.dump({
@@ -275,7 +346,7 @@ class Context:
                 }
             }, f)
 
-    @classmethod
+    @ classmethod
     def load_cache(cls, path: FilePath):
         with open(path, 'r') as f:
             cache = json.load(f)
@@ -297,12 +368,6 @@ class Context:
                 else:
                     logging.debug(
                         f"target {name} is no longer defined in the PyMakefile. Discarding cache info.")
-
-
-if __name__ == "__main__":
-    import importlib
-    makefile = importlib.import_module('PyMakefile')
-    run(makefile, 'all')
 
 
 # def _levenshtein_distance(token1: str, token2: str) -> float:
