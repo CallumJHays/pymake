@@ -5,23 +5,29 @@ from abc import ABC, abstractmethod
 import json
 from concurrent.futures import ProcessPoolExecutor
 import asyncio
-from subprocess import check_output
+from subprocess import CalledProcessError, check_output
 import logging
 import time
 import inspect
 import click
+import multiprocessing
+import shutil
+import os
 
 __all__ = [
-    'FilePath', 'Dependency', 'Dependencies',
+    'PATH', 'Path',
     'Target', 'CacheStamped', 'File', 'Compile', 'Makefile',
     'makes', 'match', 'run', 'run_async'
 ]
 
+PATH = os.getenv('PATH')
 here = Path(__file__)
 
 FilePath = Union[str, Path]  # includes directories
 Dependency = Union[FilePath, 'Target']
 Dependencies = Union[Dependency, Iterable[Dependency]]
+
+N_CPU_CORES = multiprocessing.cpu_count()
 
 
 class Target(ABC):
@@ -43,6 +49,16 @@ class Target(ABC):
         "Make the target"
         pass
 
+    @abstractmethod
+    def clean(self):
+        "'Undo' the make action if possible"
+        pass
+
+    def matches(self, query: FilePath) -> Optional[str]:
+        # TODO: glob matching
+        match = None
+        return match
+
 
 class CacheStamped(Target):
     "A target that is timestamped to the .pymake-cache file"
@@ -53,6 +69,10 @@ class CacheStamped(Target):
 
     def edited(self):
         return Context.timestamps.get(self, 0)
+
+    def clean(self):
+        if self in Context.timestamps:
+            del Context.timestamps[self]
 
 
 class Command(Target):
@@ -66,19 +86,21 @@ class Command(Target):
 class FileTarget(Target):
     def __init__(
         self,
-        target: FilePath,
+        output: FilePath,
         deps: Dependencies
     ):
         super().__init__(deps)
-        self.target = Path(target)
+        self.output = Path(output)
 
     def edited(self):
-        return self.target.stat().st_mtime
+        return self.output.stat().st_mtime
 
-    def matches(self, query: FilePath) -> Optional[str]:
-        # TODO: glob matching
-        match = None
-        return match
+    def clean(self):
+        if self.output.exists():
+            if self.output.is_dir():
+                shutil.rmtree(self.output, True)
+            else:
+                self.output.unlink()
 
 
 class Compile(FileTarget):
@@ -86,19 +108,49 @@ class Compile(FileTarget):
         pass
 
 
-class Makefile(FileTarget):
+class Makefile(Target):
     def __init__(
         self,
-        target: FilePath,
-        makefile: FilePath,
-        deps: Dependencies
+        directory: FilePath,
+        *,
+        target: Optional[str] = None,
+        makefile: FilePath = 'Makefile',
+        vars: Dict[str, str] = {},
+        extra_deps: Dependencies = [],
+        n_workers: int = N_CPU_CORES,
+        exe: FilePath = "make",
+        clean_target: str = 'clean'
     ):
-        super().__init__(target, deps)
+        super().__init__(extra_deps)
+        self.directory = directory
+        self.target = target
         self.makefile = makefile
+        self.vars = vars
         self.deps.insert(0, Path(makefile))
+        self.n_workers = n_workers
+        self.exe = exe
+        self.clean_target = clean_target
 
     def make(self):
-        sh(f"make --directory={self.makefile} -j{Context.n_workers}")
+        self._execute(self.target or "")
+
+    def clean(self):
+        self._execute(self.clean_target)
+
+    def edited(self):
+        try:
+            # check if target is up-to-date
+            # https://www.gnu.org/software/make/manual/html_node/Instead-of-Execution.html#Instead-of-Execution
+            self._execute(f"-q {self.target or ''}")
+            return 0  # target was up-to-date
+
+        except CalledProcessError:
+            return time.time()  # target was not up-to-date
+
+    def _execute(self, target: str):
+        makefile_vars = ' '.join(
+            f'{name}={item}' for name, item in self.vars.items())
+        sh(f"{self.exe} --directory={self.directory} -j{self.n_workers} {target} {makefile_vars}")
 
 
 # the string that matches the % for any @makes fn
@@ -152,7 +204,7 @@ async def make_async(
     target: Target,
     *,
     cache_path: Optional[str] = '.pymake-cache',
-    n_workers: int = 4
+    n_workers: int = N_CPU_CORES
 ):
     assert n_workers > 0
     Context.n_workers = n_workers
@@ -232,7 +284,7 @@ def make(
     target: Target,
     *,
     cache_path: Optional[str] = '.pymake-cache',
-    n_workers: int = 4,
+    n_workers: int = N_CPU_CORES,
 ):
     loop = asyncio.get_event_loop()
     loop.run_until_complete(make_async(

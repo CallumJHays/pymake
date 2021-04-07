@@ -8,25 +8,19 @@ It allows developers to express arbitrarily complex, dependency-based build-tree
 
 ```python
 # PyMakefile.py
-import pymake as mk
+from pymake import *
 
-# OOP definition - many helpful classes
-some_library = mk.Makefile(
-    'lib/some_library',
-    out = 'lib/some_library/libsome.a',
-    targets = ['clean', 'all'],
-    n_workers = 4
-)
+# OOP definition - many helpful classes,
+# such as this which executes a traditional Makefile
+some_library = Makefile('lib/some_library')
 
 # compile source -> object files
-objects = mk.Compile('build/%.o', 'src/%.[ch]', libs=[some_library])
+object_files = Compile('build/%.o', 'src/%.[ch]', libs=[some_library])
 
-# decorator definition - custom builder
-@mk.makes('hello-world', [objects, some_library])
+# decorator for custom target type definition
+@makes('hello-world', object_files)
 def hello_world():
-    [objs, lib] = mk.deps
-    mk.sh(f'gcc {objs} -I{lib.include} -L{lib} -o {mk.out}')
-    mk.out.cp('alias.exe') # mk.out is a `pathlib.Path`
+    sh(f'gcc {deps} -o {out}')
 ```
 
 Invoke from command line with:
@@ -44,19 +38,20 @@ Which will build the `hello-world` application. See [examples/hello-world](examp
 ## Benefits:
 
 - Familiar API and CLI to GNU make
-- Generate targets and dependencies dynamically
-- Fully type-hinted for an amazing developer experience with intellisense in modern editors
+- Utilise existing makefiles via [pymake.Makefile()](TODO)
+- Generate targets and dependencies dynamically via regular Python
+- Fully type-hinted for an amazing developer experience via editor intellisense
 - Debug your PyMakefiles with PDB or other editor-friendly debuggers
-- Helpful & colorful error messages for quicker hotfixing
-- Backed by extensible OOP framework
-- Callable from CLI or function calls
-- Strong support for `async` python code
-- Default implementations of:
-  - `pymake clean` - delete only target output files. Can be overridden.
+- Helpful & colorful error messages for quicker bug-fixing
+- Backed by simple, extensible OOP framework
+- Callable from CLI or python library
+- Provides default implementations of:
+  - `pymake clean` - delete all `FileTarget.output` files and clear the cache. Can be overridden.
   - `pymake [help]` - displays help from docstrings of defined targets (with default docstrings)
 - Tracks target builds timestamps by default, so that functions with up-to-date dependencies don't needlessly execute (eloquent alternative to build-flags).
 - Configurable build log color-coding / formatting
 - Cross-platform support where possible [TODO!]
+- Support for `async` python code [TODO!]
 
 ## Documentation
 
@@ -64,7 +59,7 @@ TODO
 
 ## Alternatives
 
-### GNU make
+### [GNU make](https://makefiletutorial.com/)
 
 The OG `make`. At its core it's a shell executor tied to a dependency tree. Editor support for syntax error/highlighting is minimal. Debugging support is even worse.
 
@@ -72,7 +67,7 @@ In order to track target builds that don't output files, you must use build-flag
 
 `make` is a better option for very simple build trees thanks to it's terse dependency specification syntax. Widely used in industry for decades (particularly among C/C++ devs), so more maintainable in that regard.
 
-### SCons
+### [SCons](https://github.com/SCons/scons)
 
 Similar to `pymake` being based on python and an extensible OOP framework.
 
