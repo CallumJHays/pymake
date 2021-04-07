@@ -1,4 +1,4 @@
-from importlib import import_module
+import importlib.util
 from typing import Any, Callable, Dict, Iterable, Set, Union, Optional, List, TypeVar, Tuple, overload
 from pathlib import Path
 from abc import ABC, abstractmethod
@@ -251,9 +251,6 @@ def sh(
     return output if any(output) else None
 
 
-STANDARD_MAKEFILE = Path('PyMakefile.py')
-
-
 class NoTargetMatchError(Exception):
     pass
 
@@ -263,19 +260,24 @@ class MultipleTargetsMatchError(Exception):
 
 
 @click.command()
-@click.argument("request")
-@click.argument("--makefile", "-m", default='PyMakefile.py')
-@click.argument("--cache", "-c", default='.pymake-cache')
-@click.argument("--n-workers", "-j", default=4)
-def run(
+@click.argument("request", default="help")
+@click.option("--makefile-path", "-m", default='PyMakefile.py')
+@click.option("--cache-path", "-c", default='.pymake-cache')
+@click.option("--n-workers", "-j", default=4)
+def cli(
     request: str,
-    makefile: str = 'PyMakefile.py',
+    makefile_path: str = 'PyMakefile.py',
     cache_path: str = '.pymake-cache',
     n_workers: int = 4
 ):
     "Run the makefile as a command-line app, handling arguments correctly"
 
-    module = import_module(makefile)
+    # TODO: handle being run from makefiles not named 'PyMakefile.py'
+    # module = import_module(f".{makefile_path}", __name__)
+    makefile = Path(makefile_path)
+    spec = importlib.util.spec_from_file_location(
+        makefile.stem, str(makefile_path))
+    module = importlib.util.module_from_spec(spec)
 
     try:
         target = getattr(module, request)

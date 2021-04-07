@@ -1,0 +1,12 @@
+name: pybdsim-dev
+
+channels:
+  - defaults
+  - conda-forge
+
+dependencies:
+  - python = 3.6 # support python3.6
+  - pip = 20.03
+
+  - pip:
+      - -e .
