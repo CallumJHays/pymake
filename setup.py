@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup  # type: ignore
 
 setup(
     name='pymake',
@@ -32,10 +32,10 @@ setup(
     keywords='Makefile build-system docker task-runner',
     license='MIT',
     python_requires='>=3.6',
-    py_modules=['pymake'],
+    packages=['pymake'],
     install_requires=['click'],
     entry_points='''
         [console_scripts]
-        pymake=pymake:cli
+        pymake=pymake.cli:cli
     ''',
 )
