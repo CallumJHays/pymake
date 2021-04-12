@@ -1,14 +1,17 @@
 from typing import Set, Dict
 from .target import FilePath, Target
 
-match_cache: Dict[str, Target]
+match_cache: Dict[str, Target] = {}
 
 
 def find_matching_target(request: FilePath, targets: Dict[str, Target]) -> Target:
     matching: Set[Target] = set()
     checked: Set[Target] = set()
+
     req_str = str(request)
-    if req_str in targets:
+    if req_str in match_cache:
+        return match_cache[req_str]
+    elif req_str in targets:
         return targets[req_str]
 
     for target in targets.values():
@@ -16,17 +19,20 @@ def find_matching_target(request: FilePath, targets: Dict[str, Target]) -> Targe
             if target.matches(req_str):
                 if any(matching):
                     raise MultipleTargetsMatchError(
-                        f"Multiple targets match the request '{req_str}': {matching.pop()} & {target}"
+                        f"Multiple target match the request '{req_str}': {matching.pop()} & {target}"
                     )
 
                 matching.add(target)
+
             checked.add(target)
 
     if not any(matching):
         # TODO: levenshtein debugging assistance
         raise NoTargetMatchError(
-            f"No targets matches the request '{req_str}'")
-    return matching.pop()
+            f"No target matches the request '{req_str}'")
+
+    match_cache[req_str] = found = matching.pop()
+    return found
 
 
 class NoTargetMatchError(Exception):

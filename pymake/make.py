@@ -1,8 +1,8 @@
+from pymake.targets.target import FilePath
 from pymake.targets.wildcard import find_matching_target
 from .targets import Target
-from typing import Awaitable, Optional, Union, Dict, Set, Tuple
-from .environment import N_CPU_CORES
-from .cache import Cache
+from typing import Awaitable, Optional, Union, Set, Dict
+from .cache import TimestampCache
 import asyncio
 from pathlib import Path
 import time
@@ -11,24 +11,28 @@ import time
 def make(
     target: Target,
     *,
-    cache: Optional[Union[Cache, str, Path]] = '.pymake-cache',
-    n_workers: int = N_CPU_CORES,
+    cache: Optional[Union[TimestampCache, FilePath]] = '.pymake-cache',
+    targets: Optional[Dict[str, Target]] = None,
+    prefix_dir: FilePath = ''
 ):
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(make_async(target, cache=cache))
+    loop.run_until_complete(make_async(
+        target, cache=cache, targets=targets, prefix_dir=prefix_dir))
 
 
 async def make_async(
-    target: Target,
-    *,
-    cache: Optional[Union[Cache, str, Path]] = '.pymake-cache',
-    targets: Optional[Dict[str, Target]] = None
+        target: Target,
+        *,
+        cache: Optional[Union[TimestampCache, FilePath]] = '.pymake-cache',
+        targets: Optional[Dict[str, Target]] = None,
+        prefix_dir: FilePath = ''
 ):
     assert targets  # TODO: import from calling module
     _targets = targets
+    _prefix_dir = Path(prefix_dir)
 
-    _cache = cache if cache is None or isinstance(cache, Cache) \
-        else Cache(cache, targets) if targets else None
+    _cache = cache if cache is None or isinstance(cache, TimestampCache) \
+        else TimestampCache(_prefix_dir / cache, targets) if targets else None
     loop = asyncio.get_event_loop()
 
     scheduled: Set[Target] = set()
@@ -36,44 +40,50 @@ async def make_async(
     async def ensure_remake(target: Target):
         if target not in scheduled:
             scheduled.add(target)
-            await target.make()
+            if target.target:
+                target_path = Path(target.target)
+                if target_path.exists():
+                    before = target_path.stat().st_mtime
+                    await target.make()
+                    assert target_path.stat().st_mtime > before, \
+                        "output file did not change"  # TODO: custom error
+            else:
+                await target.make()
+                if _cache is not None and target.do_cache:
+                    _cache[target] = time.time()
 
-    async def maybe_remake(target: Target) -> Optional[Tuple[Target, float]]:
-        "Recursively schedule target remakes if needed, returns the timestamp at which it was remade, or None if no remake was needed"
+    async def maybe_remake(target: Target) -> bool:
+        "Recursively schedule target remakes if needed, returns if the target was remade"
         if not any(target.deps):
             await ensure_remake(target)
-            return target, time.time()
+            return True
 
-        maybe_remaking: Set[Awaitable[Optional[Tuple[Target, float]]]] = set()
+        target_edited = await target.edited()
+        needs_remake = target_edited == float('inf')
+        maybe_remaking: Set[Awaitable[bool]] = set()
         for dep in target.deps:
             if isinstance(dep, Path):
-                dep = find_matching_target(dep, _targets)
+                if not dep.is_absolute():
+                    dep = _prefix_dir / dep
+
+                try:
+                    if dep.stat().st_mtime > target_edited:
+                        needs_remake = True
+                    continue
+                except FileNotFoundError:
+                    dep = find_matching_target(dep, _targets)
 
             maybe_remaking.add(loop.create_task(maybe_remake(dep)))
 
-        maybe_remade, pending = await asyncio.wait(maybe_remaking, return_when=asyncio.FIRST_EXCEPTION)
-        for fut in maybe_remade:
-            exc = fut.exception()
-            if exc:
-                raise exc
-
-        assert not any(pending)
-
-        needs_remake = False
-        for fut in maybe_remade:
-            res = fut.result()
-            if res:
-                needs_remake = True
-                target, timestamp = res
-                if _cache:
-                    _cache[target] = timestamp
+        if any(await asyncio.gather(*maybe_remaking)):
+            needs_remake = True
 
         if needs_remake:
             await ensure_remake(target)
-            return target, time.time()
+            return True
 
         else:
-            return None
+            return False
 
     await maybe_remake(target)
 

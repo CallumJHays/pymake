@@ -1,18 +1,15 @@
-from typing import Callable, Awaitable, Optional
+from typing import Any, Callable, Awaitable, Optional
 from .targets.target import Target, FilePath, Dependencies
-import inspect
+from .context import ctx, inject_and_run
 
 
 def makes(
     out: Optional[FilePath],
     deps: Dependencies = [],
     do_cache: bool = True
-) -> Callable[[Callable[[], Awaitable[None]]], Target]:
+) -> Callable[[Callable[..., Awaitable[Any]]], Target]:
 
-    def inner(fn: Callable[[], Awaitable[None]]):
-        n_args = len(inspect.getargspec(fn).args)
-        assert n_args < 2, "too many arguments for decorated function."
-
+    def inner(fn: Callable[..., Awaitable[Any]]):
         class Fn(Target):  # type: ignore
             __name__ = "Fn_" + fn.__name__
 
@@ -20,7 +17,7 @@ def makes(
                 super().__init__(out, deps, do_cache)
 
             async def make(self):
-                await fn()
+                await inject_and_run(ctx, fn)
 
         return Fn()  # type: ignore
     return inner

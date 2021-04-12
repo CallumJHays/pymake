@@ -1,24 +1,30 @@
 from typing import Dict
 import json
-import logging
 
 from .targets.wildcard import find_matching_target, NoTargetMatchError
 from .targets.target import Target, FilePath
+from .logging import logger
 
 
-class Cache(Dict[Target, float]):
+class TimestampCache(Dict[Target, float]):
 
     def __init__(self, path: FilePath, targets: Dict[str, Target]):
         self.path = path
-        with open(path, 'r') as f:
-            json_cache: Dict[str, float] = json.load(f)
-            for name, data in json_cache.items():
-                try:
-                    target = find_matching_target(name, targets)
-                    self[target] = data
-                except NoTargetMatchError:
-                    logging.debug(
-                        f"target {name} is no longer defined in the PyMakefile. Discarding cache info.")
+        try:
+            with open(path, 'r') as f:
+                json_cache: Dict[str, float] = json.load(f)
+                for name, data in json_cache.items():
+                    try:
+                        target = find_matching_target(name, targets)
+                        assert target
+                        self[target] = data
+                    except NoTargetMatchError:
+                        logger.debug(
+                            f"target {name} is no longer defined in the PyMakefile. Discarding cache info.")
+                logger.debug(
+                    f"Loaded {len(self)} timestamps from cache file \"{path}\"")
+        except FileNotFoundError:
+            logger.debug(f"Cache file not found: \"{path}\"")
 
     def save(self):
         with open(self.path, 'w') as f:
