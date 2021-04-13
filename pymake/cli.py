@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .targets.target import FilePath, Target, Union
 from .targets.wildcard import NoTargetMatchError, find_matching_target
-from .make import make
+from .make import make_sync
 from .decorator import makes
 from .logging import logger, YELLOW, RESET, GREY
 from .utils import unindent
@@ -49,8 +49,8 @@ def run(
             else:
                 raise e
 
-    make(target, cache=None if no_cache else cache,
-         targets=targets, prefix_dir=Path(makefile).parent)
+    make_sync(target, cache=None if no_cache else cache,
+              targets=targets, prefix_dir=Path(makefile).parent)
 
 
 def cli(makefile: FilePath, loglevel: Union[int, str] = "WARNING"):

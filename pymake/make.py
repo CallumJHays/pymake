@@ -5,10 +5,11 @@ from typing import Awaitable, Optional, Union, Set, Dict
 from .cache import TimestampCache
 import asyncio
 from pathlib import Path
+import os
 import time
 
 
-def make(
+def make_sync(
     target: Target,
     *,
     cache: Optional[Union[TimestampCache, FilePath]] = '.pymake-cache',
@@ -16,11 +17,11 @@ def make(
     prefix_dir: FilePath = ''
 ):
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(make_async(
+    loop.run_until_complete(make(
         target, cache=cache, targets=targets, prefix_dir=prefix_dir))
 
 
-async def make_async(
+async def make(
         target: Target,
         *,
         cache: Optional[Union[TimestampCache, FilePath]] = '.pymake-cache',
@@ -40,17 +41,24 @@ async def make_async(
     async def ensure_remake(target: Target):
         if target not in scheduled:
             scheduled.add(target)
-            if target.target:
-                target_path = Path(target.target)
-                if target_path.exists():
-                    before = target_path.stat().st_mtime
+            env_before = os.environ.copy()
+            os.environ.clear()
+            os.environ.update(target.env)
+            try:
+                if target.target:
+                    target_path = Path(target.target)
+                    if target_path.exists():
+                        before = target_path.stat().st_mtime
+                        await target.make()
+                        assert target_path.stat().st_mtime > before, \
+                            "output file did not change"  # TODO: custom error
+                else:
                     await target.make()
-                    assert target_path.stat().st_mtime > before, \
-                        "output file did not change"  # TODO: custom error
-            else:
-                await target.make()
-                if _cache is not None and target.do_cache:
-                    _cache[target] = time.time()
+                    if _cache is not None and target.do_cache:
+                        _cache[target] = time.time()
+            finally:
+                os.environ.clear()
+                os.environ.update(env_before)
 
     async def maybe_remake(target: Target) -> bool:
         "Recursively schedule target remakes if needed, returns if the target was remade"

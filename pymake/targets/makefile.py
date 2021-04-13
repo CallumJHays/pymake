@@ -2,7 +2,7 @@ from typing import Dict, Optional
 from pathlib import Path
 from ..shell import sh, ShellExecError
 
-from .target import FilePath, Target, Dependencies
+from .target import FilePath, Target, Depends
 from ..environment import N_CPU_CORES
 
 
@@ -14,7 +14,7 @@ class Makefile(Target):
         target: Optional[str] = None,
         makefile: FilePath = 'Makefile',
         vars: Dict[str, str] = {},
-        extra_deps: Dependencies = [],
+        extra_deps: Depends = [],
         n_workers: int = N_CPU_CORES,
         exe: FilePath = "make",
         clean_target: str = 'clean'
@@ -37,7 +37,7 @@ class Makefile(Target):
 
     async def edited(self) -> float:
         try:
-            # check if target is up-to-date
+            # check if Makefile target is up-to-date
             # https://www.gnu.org/software/make/manual/html_node/Instead-of-Execution.html#Instead-of-Execution
             await self._execute(f"-q {self.target or ''}", silent=True)
             return 0  # target was up-to-date

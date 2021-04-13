@@ -1,6 +1,7 @@
-from .target import FilePath, Dependencies, Dependency, Target
+from .target import Dependencies, Target
 from .makefile import Makefile
+from .group import Group
 
 __all__ = [
-    "FilePath", "Dependencies", "Dependency", "Target", "Makefile"
+    "Dependencies", "Target", "Makefile", "Group"
 ]
