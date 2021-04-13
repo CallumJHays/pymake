@@ -7,6 +7,7 @@ import asyncio
 from pathlib import Path
 import os
 import time
+from concurrent.futures import ProcessPoolExecutor
 
 
 def make_sync(
@@ -22,11 +23,11 @@ def make_sync(
 
 
 async def make(
-        target: Target,
-        *,
-        cache: Optional[Union[TimestampCache, FilePath]] = '.pymake-cache',
-        targets: Optional[Dict[str, Target]] = None,
-        prefix_dir: FilePath = ''
+    target: Target,
+    *,
+    cache: Optional[Union[TimestampCache, FilePath]] = '.pymake-cache',
+    targets: Optional[Dict[str, Target]] = None,
+    prefix_dir: FilePath = ''
 ):
     assert targets  # TODO: import from calling module
     _targets = targets
@@ -36,64 +37,88 @@ async def make(
         else TimestampCache(_prefix_dir / cache, targets) if targets else None
     loop = asyncio.get_event_loop()
 
-    scheduled: Set[Target] = set()
+    scheduled: Dict[Target, Awaitable[float]] = {}
+    
+    loop = asyncio.get_event_loop()
+    try:
+        with ProcessPoolExecutor() as multiprocessor:
+            async def maybe_remake(target: Target) -> bool:
+                "Recursively schedule target remakes if needed, returns if the target was remade"
+                if target in scheduled:
+                    await scheduled[target]
+                    return True
+                
+                if not any(target.deps):
+                    needs_remake = True
 
-    async def ensure_remake(target: Target):
-        if target not in scheduled:
-            scheduled.add(target)
-            env_before = os.environ.copy()
-            os.environ.clear()
-            os.environ.update(target.env)
-            try:
-                if target.target:
-                    target_path = Path(target.target)
-                    if target_path.exists():
-                        before = target_path.stat().st_mtime
-                        await target.make()
-                        assert target_path.stat().st_mtime > before, \
-                            "output file did not change"  # TODO: custom error
+                target_edited = await target.edited()
+                needs_remake = target_edited == float('inf')
+                maybe_remaking: Set[Awaitable[bool]] = set()
+                for dep in target.deps:
+                    if isinstance(dep, Path):
+                        if not dep.is_absolute():
+                            dep = _prefix_dir / dep
+
+                        try:
+                            if dep.stat().st_mtime > target_edited:
+                                needs_remake = True
+                            continue
+                        except FileNotFoundError:
+                            dep = find_matching_target(dep, _targets)
+
+                    maybe_remaking.add(asyncio.ensure_future(maybe_remake(dep)))
+
+                if any(await asyncio.gather(*maybe_remaking)):
+                    needs_remake = True
+
+                if needs_remake:
+                    scheduled[target] = asyncio.ensure_future(
+                        loop.run_in_executor(multiprocessor, _remake, target))
+                    await scheduled[target]
+                    return True
+
                 else:
-                    await target.make()
-                    if _cache is not None and target.do_cache:
-                        _cache[target] = time.time()
-            finally:
-                os.environ.clear()
-                os.environ.update(env_before)
+                    return False
 
-    async def maybe_remake(target: Target) -> bool:
-        "Recursively schedule target remakes if needed, returns if the target was remade"
-        if not any(target.deps):
-            await ensure_remake(target)
-            return True
+            await maybe_remake(target)
+            
+    finally:
+        if _cache:
+            _cache.save()
 
-        target_edited = await target.edited()
-        needs_remake = target_edited == float('inf')
-        maybe_remaking: Set[Awaitable[bool]] = set()
-        for dep in target.deps:
-            if isinstance(dep, Path):
-                if not dep.is_absolute():
-                    dep = _prefix_dir / dep
+def _remake(target: Target) -> float:
+    "Remake the given target, ensuring envvars and cwd is as expected. Returns the time the target was remade"
 
-                try:
-                    if dep.stat().st_mtime > target_edited:
-                        needs_remake = True
-                    continue
-                except FileNotFoundError:
-                    dep = find_matching_target(dep, _targets)
+    env_before = os.environ.copy()
+    os.environ.clear()
+    os.environ.update(target.env)
 
-            maybe_remaking.add(loop.create_task(maybe_remake(dep)))
+    if not Path.cwd().samefile(target.cwd):
+        os.chdir(target.cwd)
 
-        if any(await asyncio.gather(*maybe_remaking)):
-            needs_remake = True
-
-        if needs_remake:
-            await ensure_remake(target)
-            return True
-
-        else:
-            return False
-
-    await maybe_remake(target)
-
-    if _cache:
-        _cache.save()
+    async def process():
+        after = None
+        if target.target:
+            target_path = Path(target.target)
+            if target_path.exists():
+                before = target_path.stat().st_mtime
+                await target.make()
+                after = target_path.stat().st_mtime
+                # TODO: custom errors
+                assert after != before, "output file did not change" 
+                assert after > before, "output file went back in time"
+        
+        if not after:
+            await target.make()
+            after = time.time()
+        
+        return after
+    
+    try:
+        made_time = asyncio.get_event_loop() \
+            .run_until_complete(process())
+    finally:
+        os.environ.clear()
+        os.environ.update(env_before)
+    
+    return made_time

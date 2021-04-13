@@ -1,11 +1,13 @@
-from typing import Iterable, List, Union, Optional, TypeVar
+from typing import Any, Iterable, List, Union, Optional, TypeVar, TYPE_CHECKING
 from pathlib import Path
 from abc import ABC, abstractmethod
 from copy import copy
 import shutil
 import inspect
 import os
-from ..context import ctx
+
+if TYPE_CHECKING:
+    from ..cache import TimestampCache
 
 Dependencies = List[Union[Path, 'Target']]  # stored dependencies
 
@@ -17,9 +19,9 @@ Self = TypeVar('Self', bound='Target')
 
 
 class Target(ABC):
-    "A target with one or many dependencies"
+    "A target with any number of dependencies"
 
-    def __init__(self, target: Optional[Union[str, FilePath]], deps: Depends, do_cache: bool = True, srcdir: Optional[Path] = None):
+    def __init__(self, target: Optional[Union[str, FilePath]], deps: Depends, do_cache: bool = True):
         if isinstance(target, str):
             assert not any(c in target for c in ' \t\n'), \
                 "target should not contain any whitespace characters"
@@ -27,17 +29,18 @@ class Target(ABC):
                 "Only \"%\" wildcards are supported for target names"
 
         # make all paths relative to the source file of instantiation
-        self.srcdir = srcdir = Path('')
         for frame in inspect.stack():
             if not isinstance(frame.frame.f_locals.get('self', None), Target):
-                self.srcdir = Path(frame.filename).parent
+                self.cwd = Path(frame.filename).parent
                 break
+        else:
+            raise Exception("Couldn't find cwd where this target is defined")
 
-        self.target = self.srcdir / target if target else None
+        self.target = target if target else None
         self.deps: Dependencies = \
-            [srcdir / deps] if isinstance(deps, (str, Path)) \
-            else [deps] if isinstance(deps, Target) \
-            else [srcdir / src if isinstance(src, (str, Path)) else src for src in deps]
+            [Path(deps)] if isinstance(deps, str) \
+            else [deps] if isinstance(deps, (Path, Target)) \
+            else [Path(src) if isinstance(src, str) else src for src in deps]
         self.do_cache = do_cache and any(self.deps)
         self.env = os.environ.copy()
 
@@ -46,21 +49,17 @@ class Target(ABC):
         "Make the target"
         pass
 
-    async def clean(self):
+    async def clean(self, cache: 'TimestampCache'):
         "'Undo' the make action if possible"
-        if self.target is None:
-            try:
-                del ctx.cache[self]
-            finally:
-                return
-
-        target_path = Path(self.target)
-        if target_path.exists():
-            if target_path.is_dir():
-                shutil.rmtree(target_path, True)
-            else:
-                target_path.unlink()
-            return
+        if self.target:
+            target_path = Path(self.target)
+            if target_path.exists():
+                if target_path.is_dir():
+                    shutil.rmtree(target_path, True)
+                else:
+                    target_path.unlink()
+        else:
+            cache.pop(self, None)
 
     async def edited(self) -> float:
         "Return POSIX timestamp at which this was last edited. Should return float('inf') if unable to tell."

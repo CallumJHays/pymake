@@ -4,13 +4,22 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
+    // {
+    //   "name": "ubdsim: ByteCode",
+    //   "type": "python",
+    //   "request": "launch",
+    //   "program": "${workspaceFolder}/../ubdsim/PyMakefile.py",
+    //   "args": ["bytecode"],
+    //   "console": "integratedTerminal"
+    // },
     {
-      "name": "ubdsim: ByteCode",
+      "name": "examples/zip",
       "type": "python",
       "request": "launch",
-      "program": "${workspaceFolder}/../ubdsim/PyMakefile.py",
-      "args": ["bytecode"],
+      "program": "${workspaceFolder}/examples/zip/PyMakefile.py",
+      // "args": ["zip"],
       "console": "integratedTerminal"
-    }
+    },
+
   ]
 }

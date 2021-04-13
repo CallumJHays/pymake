@@ -1,13 +1,12 @@
 import click
 from runpy import run_path
-import asyncio
-from typing import Dict, List
+from typing import Any, Dict, List
 from pathlib import Path
 
 from .targets.target import FilePath, Target, Union
 from .targets.wildcard import NoTargetMatchError, find_matching_target
+from .targets.clean import Clean
 from .make import make_sync
-from .decorator import makes
 from .logging import logger, YELLOW, RESET, GREY
 from .utils import unindent
 
@@ -41,11 +40,9 @@ def run(
             target = find_matching_target(request, targets)
         except NoTargetMatchError as e:
             if request == 'help':
-                target = default_help(targets)
+                target = DefaultHelp(targets)
             elif request == 'clean':
-                target = default_clean(targets)
-            elif request.startswith('clean-'):
-                assert False
+                target = Clean(targets.values())
             else:
                 raise e
 
@@ -66,7 +63,7 @@ def cli(makefile: FilePath, loglevel: Union[int, str] = "WARNING"):
     @click.argument("request", default="help")
     @click.option("--no-cache", default=False)
     @click.option("--cache", default='.pymake-cache')
-    def cmd(*args, **kwargs):
+    def cmd(*args: Any, **kwargs: Any):
         run(*args, makefile=str(makefile),  # type: ignore
             loglevel=loglevel, **kwargs)  # type: ignore
     return cmd()
@@ -78,18 +75,21 @@ def cli(makefile: FilePath, loglevel: Union[int, str] = "WARNING"):
 @click.option("--loglevel", "-l", default='WARNING')
 @click.option("--no-cache", default=False)
 @click.option("--cache", default='.pymake-cache')
-def cli_shell(*args, **kwargs):
+def cli_shell(*args: Any, **kwargs: Any):
     "Run the makefile as a command-line app, handling arguments correctly"
     run(*args, **kwargs)
 
 
-def default_help(targets: Dict[str, Target]):
-    target2names: Dict[Target, List[str]] = {}
-    for name, target in targets.items():
-        target2names.setdefault(target, []).append(name)
+class DefaultHelp(Target):
+    def __init__(self, targets: Dict[str, Target]):
+        super().__init__(None, [])
+        self.targets = targets
 
-    @makes('help')
-    async def help():
+    def make(self): # type: ignore
+        target2names: Dict[Target, List[str]] = {}
+        for name, target in self.targets.items():
+            target2names.setdefault(target, []).append(name)
+
         print('All Targets:')
         for target, names in target2names.items():
             spec_str = f"    - {'/'.join(f'{YELLOW}{name}{RESET}' for name in names)} {repr(target)}"
@@ -103,13 +103,3 @@ def default_help(targets: Dict[str, Target]):
                 # make indentation 4 spaces
                 indent4 = unindent(target.__doc__).replace('\n', '\n    ')
                 print(f"{GREY}{indent4}{RESET}")
-            # print("=" * 80)
-    return help
-
-
-def default_clean(targets: Dict[str, Target]):
-    @makes('clean')
-    async def clean():
-        print('Pymake help. Available targets:')
-        await asyncio.gather(target.clean() for target in set(targets.values()))
-    return clean
