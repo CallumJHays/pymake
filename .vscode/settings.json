@@ -1,5 +1,5 @@
 {
-    "python.pythonPath": "C:\\Users\\n9464263\\AppData\\Local\\Programs\\Python\\Python39\\python.exe",
+    "python.pythonPath": "/home/cal/.conda/envs/py36/bin/python",
     
     "python.analysis.typeCheckingMode": "strict"
 }

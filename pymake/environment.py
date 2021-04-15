@@ -1,13 +1,23 @@
 import contextlib
 import os
 import multiprocessing
+from typing import Dict
 
 N_CPU_CORES = multiprocessing.cpu_count()
 PATH = os.getenv('PATH')
 
+@contextlib.contextmanager
+def env_isolated(**vars: str):
+    with _env_inner(True, vars):
+        yield
 
 @contextlib.contextmanager
-def env_vars(isolated: bool = False, **vars: str):
+def env(**vars: str):
+    with _env_inner(False, vars):
+        yield
+
+@contextlib.contextmanager
+def _env_inner(isolated: bool, vars: Dict[str, str]):
     global PATH
     before = os.environ.copy()
     before_PATH = os.environ.get('PATH')
