@@ -47,7 +47,7 @@ Which will build the `hello-world` application. See [examples/hello-world](examp
 - Python enables dynamic generation of targets and dependencies
 - Utilise existing `Makefiles` via [pymake.Makefile()](TODO)
 - Tracks target builds timestamps to a `.pymake-cache` file by default, so that functions with up-to-date dependencies don't needlessly execute (eloquent alternative to using build flags).
-- Helpful, <span style="color: cyan">colorful</span> and <span style="color: magenta">>> configurable</span> log & <span style="color: red">error messages</span> for <b>quicker</b> bug-fixing
+- Helpful, <u>colorful and configurable</u> log & <b>error messages</b> for <i>quicker</i> bug-fixing
 - Debug your PyMakefiles with PDB or other editor-friendly debuggers
 - Supports `async` python code out of the box
 - Fully type-hinted for a better developer experience via editor intellisense
