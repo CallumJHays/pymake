@@ -17,7 +17,7 @@ object_files = CompileC('build/%.o', 'src/%.[ch]', libs=[some_library])
 
 # link all object files into an executable
 @makes('hello-world', object_files("*"))
-def hello_world(deps: Path[], out: Path):
+def hello_world(deps: List[Path], out: Path):
     sh(f'gcc {deps} -o {out}')
 ```
 
