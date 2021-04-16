@@ -16,6 +16,7 @@ def find_matching_target(request: FilePath, targets: Dict[str, Target]) -> Targe
         return targets[req_str]
 
     req_pat = re.compile(req_str
+                         # TODO: ensure that this is actually a dir, even when at the end
                          .replace("**", r"\w*")
                          .replace("*", r"\w*"))
 

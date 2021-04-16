@@ -2,56 +2,66 @@
 
 `pymake` is a python library and CLI that mimics GNU `make`'s API.
 
-It allows developers to express arbitrarily complex, dependency-based build-trees.
+It allows developers to express and execute arbitrarily complex, dependency-based build-trees.
 
-## Example (WIP)
+## Example
 
 ```python
 # PyMakefile.py
 from pymake import *
 
-# OOP definition - many helpful classes,
-# such as this which executes a traditional Makefile
 some_library = Makefile('lib/some_library')
 
 # compile source -> object files
-object_files = Compile('build/%.o', 'src/%.[ch]', libs=[some_library])
+object_files = CompileC('build/%.o', 'src/%.[ch]', libs=[some_library])
 
-# decorator for custom target type definition
-@makes('hello-world', object_files)
-def hello_world():
+# link all object files into an executable
+@makes('hello-world', object_files("*"))
+def hello_world(deps: Path[], out: Path):
     sh(f'gcc {deps} -o {out}')
 ```
 
-Invoke from command line with:
+The above can be rewritten as:
+
+```python
+from pymake import *
+
+hello_world = CompileC(
+  'hello-world', 'src/**/*.[ch]',
+  libs=[Makefile('lib/some_library')]
+)
+```
+
+Example CLI invocations:
 
 ```bash
-pymake hello_world # matches the target name
-# or
-pymake hello-world # matches the output path
-# or
-python PyMakefile.py hello-world # without the `pymake` executable
+pymake hello_world `object_files(a, b, c)`
+pymake hello-world
 ```
 
 Which will build the `hello-world` application. See [examples/hello-world](examples/hello-world) for more detail.
 
-## Benefits:
+## Benefits
 
 - Familiar API and CLI to GNU make
-- Utilise existing makefiles via [pymake.Makefile()](TODO)
-- Generate targets and dependencies dynamically via regular Python
-- Fully type-hinted for an amazing developer experience via editor intellisense
+- Python enables dynamic generation of targets and dependencies
+- Utilise existing `Makefiles` via [pymake.Makefile()](TODO)
+- Tracks target builds timestamps to a `.pymake-cache` file by default, so that functions with up-to-date dependencies don't needlessly execute (eloquent alternative to using build flags).
+- Helpful, <span style="color: cyan">colorful</span> and <span style="color: magenta">>> configurable</span> log & <span style="color: red">error messages</span> for <b>quicker</b> bug-fixing
 - Debug your PyMakefiles with PDB or other editor-friendly debuggers
-- Helpful & colorful error messages for quicker bug-fixing
+- Supports `async` python code out of the box
+- Fully type-hinted for a better developer experience via editor intellisense
 - Backed by simple, extensible OOP framework
-- Callable from CLI or python library
+- Callable from CLI or via python library.
 - Provides default implementations of:
   - `pymake clean` - delete all `FileTarget.output` files and clear the cache. Can be overridden.
-  - `pymake [help]` - displays help from docstrings of defined targets (with default docstrings)
-- Tracks target builds timestamps by default, so that functions with up-to-date dependencies don't needlessly execute (eloquent alternative to build-flags).
-- Configurable build log color-coding / formatting
-- Cross-platform support where possible [TODO!]
-- Support for `async` python code [TODO!]
+  - `pymake show` - displays dependencies and help from docstrings of defined targets (with default docstrings)
+- Import, reconfigure and run targets programatically from other `PyMakefiles` within a single dependency tree.
+
+## Caveats
+
+- Global mutable state does not work out of the box (ie the `globals` statement in a function body).
+  - `pymake` may provide a recommended method for achieving this in the future but for now I can't see a use-case.
 
 ## Documentation
 
@@ -74,3 +84,8 @@ Similar to `pymake` being based on python and an extensible OOP framework.
 The API is not as nice to use as `pymake` though as the scons library is injected rather than imported. Therefore editors either need an SCons extension to provide intellisense or developers must bend over backwards to achieve this.
 
 Requires usage of the `scons` executable, whereas `PyMakefiles` can be executed directly through python.
+
+## Future Goals
+
+- `pymake --render [target]` - Produce a graphviz graphic or .dot file of the dependency tree required by a target
+- Cross-platform support where possible
