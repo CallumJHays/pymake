@@ -75,10 +75,11 @@ class Target(ABC):
         except FileNotFoundError:
             return float('inf')
 
-    def matches(self, query: str) -> Optional[str]:
-        # TODO: glob matching
-        match = None
-        return match
+    def matches(self, query: 're.Pattern[str]') -> Optional[str]:
+        if self.target:
+            match = re.match(query, str(self.cwd / self.target))
+            if match:
+                return match.string
 
     def has_wildcard(self) -> bool:
         return self.target is not None and '%' in str(self.target)

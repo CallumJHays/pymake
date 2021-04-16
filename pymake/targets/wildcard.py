@@ -1,3 +1,4 @@
+import re
 from typing import Set, Dict
 from .target import FilePath, Target
 
@@ -14,12 +15,16 @@ def find_matching_target(request: FilePath, targets: Dict[str, Target]) -> Targe
     elif req_str in targets:
         return targets[req_str]
 
+    req_pat = re.compile(req_str
+                         .replace("**", r"\w*")
+                         .replace("*", r"\w*"))
+
     for target in targets.values():
         if not target in checked:
-            if target.matches(req_str):
+            if target.matches(req_pat):
                 if any(matching):
                     raise MultipleTargetsMatchError(
-                        f"Multiple target match the request '{req_str}': {matching.pop()} & {target}"
+                        f'Multiple target match the request "{req_str}": {matching.pop()} and {target}'
                     )
 
                 matching.add(target)

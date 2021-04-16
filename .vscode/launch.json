@@ -17,9 +17,9 @@
       "type": "python",
       "request": "launch",
       "program": "${workspaceFolder}/examples/zip/PyMakefile.py",
-      // "args": ["zip"],
+      "args": ["zip"],
+      "justMyCode": false,
       "console": "integratedTerminal"
-    },
-
+    }
   ]
 }

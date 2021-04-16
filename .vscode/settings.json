@@ -1,5 +1,5 @@
 {
-    "python.pythonPath": "/home/cal/.conda/envs/py36/bin/python",
-    
-    "python.analysis.typeCheckingMode": "strict"
+  "python.pythonPath": "/home/cal/.conda/bin/python",
+
+  "python.analysis.typeCheckingMode": "strict"
 }
