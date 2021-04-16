@@ -10,10 +10,10 @@ It allows developers to express and execute arbitrarily complex, dependency-base
 # PyMakefile.py
 from pymake import *
 
-some_library = Makefile('lib/some_library', out='lib/some_library/libsome.a')
+some_lib = Makefile('lib/some_lib', out='lib/some_lib/libsome.a')
 
 # compile source -> object files
-object_files = CompileC('build/%.o', 'src/%.[ch]', libs=[some_library])
+object_files = CompileC('build/%.o', 'src/%.[ch]', libs=[some_lib])
 
 # link all object files into an executable
 @makes('hello-world', object_files("*"))
@@ -28,18 +28,19 @@ from pymake import *
 
 hello_world = CompileC(
   'hello-world', 'src/**/*.[ch]',
-  libs=[Makefile('lib/some_library')]
+  libs=[
+    Makefile('lib/some_lib', out='lib/some_lib/libsome.a')
+  ]
 )
 ```
 
-Example CLI invocations:
+Now build the `hello-world` executable with:
 
 ```bash
-pymake hello_world `object_files(a, b, c)`
 pymake hello-world
 ```
 
-Which will build the `hello-world` application. See [examples/hello-world](examples/hello-world) for more detail.
+See [examples/hello-world](examples/hello-world) for more detail.
 
 ## Benefits
 
