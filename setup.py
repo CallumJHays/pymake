@@ -31,11 +31,11 @@ setup(
     author_email='callumjhays@gmail.com',
     keywords='Makefile build-system docker task-runner',
     license='MIT',
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     packages=['pymake'],
-    install_requires=['click'],
+    install_requires=['click', 'multiprocess', 'dill'],
     entry_points='''
         [console_scripts]
-        pymake=pymake.cli:cli
+        pymake=pymake.cli:cli_shell
     ''',
 )
