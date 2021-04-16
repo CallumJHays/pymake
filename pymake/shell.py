@@ -3,7 +3,7 @@ from typing import Optional
 from asyncio.subprocess import create_subprocess_shell, PIPE
 from subprocess import CalledProcessError
 from .utils import unindent
-from .logging import logger, YELLOW, RESET
+from .logger import logger, YELLOW, RESET
 import inspect
 
 

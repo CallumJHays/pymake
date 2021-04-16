@@ -1,10 +1,12 @@
-from typing import Any, Iterable, List, Union, Optional, TypeVar, TYPE_CHECKING
+from typing import Iterable, List, Union, Optional, TypeVar, TYPE_CHECKING
 from pathlib import Path
 from abc import ABC, abstractmethod
 from copy import copy
 import shutil
 import inspect
 import os
+import re
+from ..logger import BLUE, RESET
 
 if TYPE_CHECKING:
     from ..cache import TimestampCache
@@ -30,7 +32,7 @@ class Target(ABC):
 
         # make all paths relative to the source file of instantiation
         for frame in inspect.stack():
-            if not isinstance(frame.frame.f_locals.get('self', None), Target):
+            if not isinstance(frame.frame.f_locals.get('self'), Target):
                 self.cwd = Path(frame.filename).parent
                 break
         else:
@@ -50,7 +52,7 @@ class Target(ABC):
         pass
 
     async def clean(self, cache: 'TimestampCache'):
-        "'Undo' the make action if possible"
+        "'Undo' the make action if possible, by removing target from filesystem or cache"
         if self.target:
             target_path = Path(self.target)
             if target_path.exists():
@@ -98,4 +100,4 @@ class Target(ABC):
         return new
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}{f'({self.target})' if self.target else ''}"
+        return f"{BLUE}{self.__class__.__name__}({RESET}{self.target or ''}{BLUE}){RESET}"

@@ -3,7 +3,7 @@ import json
 
 from .targets.wildcard import find_matching_target, NoTargetMatchError
 from .targets.target import Target, FilePath
-from .logging import logger
+from .logger import logger
 
 
 class TimestampCache(Dict[Target, float]):
