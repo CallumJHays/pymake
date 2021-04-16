@@ -55,7 +55,7 @@ def run(
             try:
                 target = find_matching_target(request, targets)
             except NoTargetMatchError as e:
-                if request == 'show-targets':
+                if request == 'show':
                     target = ShowTargets(targets)
                 elif request == 'clean':
                     target = Clean(targets.values())
@@ -79,7 +79,7 @@ def cli(makefile: FilePath, loglevel: Union[int, str] = "WARNING"):
     """
     # not DRY enough... but whatever
     @click.command()
-    @click.argument("request", default="show-targets")
+    @click.argument("request", default="show")
     @click.option("--cache", default='.pymake-cache', help="Path to cache file")
     @click.option("--no-cache", default=False, help="Set to disable caching")
     def cmd(*args: Any, **kwargs: Any):
@@ -89,7 +89,7 @@ def cli(makefile: FilePath, loglevel: Union[int, str] = "WARNING"):
 
 
 @click.command()
-@click.argument("request", default="show-targets")
+@click.argument("request", default="show")
 @click.option("--makefile", "-m", default='PyMakefile.py',
               help="Path to the makefile. Defaults to 'PyMakefile.py' in current directory.")
 @click.option("--cache", default='.pymake-cache', help="Path to cache file")
@@ -130,7 +130,7 @@ class ShowTargets(Target):
         for target, names in target2names.items():
             print_target(target, names)
 
-        print_target(self, ['show-targets'])
+        print_target(self, ['show'])
         clean_all = Clean(target2names.keys())
         clean_all.__doc__ = "Clean all targets by deleting all specified target files"
         print_target(clean_all, ['clean'])

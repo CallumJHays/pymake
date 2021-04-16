@@ -17,8 +17,8 @@ object_files = CompileC('build/%.o', 'src/%.[ch]', libs=[some_lib])
 
 # link all object files into an executable
 @makes('hello-world', object_files("*"))
-def hello_world(deps: List[Path], out: Path):
-    sh(f'gcc {deps} -o {out}')
+async def hello_world(deps: List[Path], out: Path):
+    await sh(f'gcc {deps} -o {out}')
 ```
 
 The above can be rewritten as:
@@ -40,7 +40,7 @@ Now build the `hello-world` executable with:
 pymake hello-world
 ```
 
-See [examples/hello-world](examples/hello-world) for more detail.
+See [examples/hello-world](examples/hello-world) for more detail, or check out the [documentation](#documentation).
 
 ## Benefits
 
@@ -51,6 +51,7 @@ See [examples/hello-world](examples/hello-world) for more detail.
 - Helpful, <u>colorful and configurable</u> log & <b>error messages</b> for <i>quicker</i> bug-fixing
 - Debug your PyMakefiles with PDB or other editor-friendly debuggers
 - Supports `async` python code out of the box
+- Scales far better with complexity than traditional `Makefile`s
 - Fully type-hinted for a better developer experience via editor intellisense
 - Backed by simple, extensible OOP framework
 - Callable from CLI or via python library.
@@ -66,7 +67,17 @@ See [examples/hello-world](examples/hello-world) for more detail.
 
 ## Documentation
 
-TODO
+### Concepts
+
+#### Targets
+
+#### Relative Paths
+
+#### Wildcards
+
+#### Caching
+
+### API
 
 ## Alternatives
 
