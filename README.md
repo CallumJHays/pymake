@@ -10,7 +10,7 @@ It allows developers to express and execute arbitrarily complex, dependency-base
 # PyMakefile.py
 from pymake import *
 
-some_library = Makefile('lib/some_library')
+some_library = Makefile('lib/some_library', out='lib/some_library/libsome.a')
 
 # compile source -> object files
 object_files = CompileC('build/%.o', 'src/%.[ch]', libs=[some_library])
