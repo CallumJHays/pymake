@@ -7,6 +7,8 @@ from .make import make, make_sync
 from .targets import Makefile, Target, Dependencies, Group
 from pathlib import Path
 
+__FLAG_IS_PYMAKEFILE__ = True
+
 __all__ = ["TimestampCache", "cli", "makes", "env", "PATH", "Path",
-           "sh", "make", "make_sync",
+           "sh", "make", "make_sync", "__FLAG_IS_PYMAKEFILE__",
            "Makefile", "Target", "Dependencies", "Group"]

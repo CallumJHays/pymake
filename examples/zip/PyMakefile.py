@@ -1,9 +1,8 @@
-from pymake.targets.target import FilePath
 from pymake import *
 
 
 @makes('files.zip', 'files/*')
-async def zip(out: FilePath, files: Dependencies):
+async def zip(out: Path, files: Dependencies):
     await sh(f"zip -r {out} {files}")
 
 if __name__ == "__main__":

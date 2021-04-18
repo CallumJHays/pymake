@@ -1,13 +1,13 @@
-from pymake.targets.target import FilePath
-from pymake.targets.wildcard import find_matching_target
-from .targets import Target
+from .targets.target import FilePath, Target
+from .targets.wildcard import find_matching_target
 from typing import Awaitable, Optional, Union, Set, Dict
 from .cache import TimestampCache
 import asyncio
 from pathlib import Path
 import os
+import glob
 import time
-from .pathos_processpoolexecutor import ProcessPoolExecutor
+from .processpoolexecutor import ProcessPoolExecutor
 
 
 def make_sync(
@@ -20,6 +20,9 @@ def make_sync(
     loop = asyncio.get_event_loop()
     loop.run_until_complete(make(
         target, cache=cache, targets=targets, prefix_dir=prefix_dir))
+
+# technically not 'uncatchable', but most except clauses catch Exception
+# which is a subclass of BaseException. Therefore BaseExceptions won't be caught
 
 
 async def make(
@@ -58,8 +61,11 @@ async def make(
                             dep = _prefix_dir / dep
 
                         try:
-                            if dep.stat().st_mtime > target_edited:
-                                needs_remake = True
+                            # we use glob.iglob over dep.glob as dep.glob never follows symlinks
+                            for f in glob.iglob(str(dep)):
+                                if Path(f).stat().st_mtime > target_edited:
+                                    needs_remake = True
+                                    break
                             continue
                         except FileNotFoundError:
                             dep = find_matching_target(dep, _targets)
@@ -113,12 +119,13 @@ def _remake(target: Target) -> float:
         if not after:
             await target.make()
             after = time.time()
-
         return after
 
     try:
         made_time = asyncio.new_event_loop() \
             .run_until_complete(process())
+    except:
+        raise
     finally:
         os.environ.clear()
         os.environ.update(env_before)

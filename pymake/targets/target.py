@@ -23,7 +23,13 @@ Self = TypeVar('Self', bound='Target')
 class Target(ABC):
     "A target with any number of dependencies"
 
-    def __init__(self, target: Optional[Union[str, FilePath]], deps: Depends, do_cache: bool = True):
+    def __init__(
+        self,
+        target: Optional[Union[str, FilePath]],
+        deps: Depends,
+        do_cache: bool = True,
+        cwd: Optional[FilePath] = None
+    ):
         if isinstance(target, str):
             assert not any(c in target for c in ' \t\n'), \
                 "target should not contain any whitespace characters"
@@ -31,12 +37,22 @@ class Target(ABC):
                 "Only \"%\" wildcards are supported for target names"
 
         # make all paths relative to the source file of instantiation
-        for frame in inspect.stack():
-            if not isinstance(frame.frame.f_locals.get('self'), Target):
-                self.cwd = Path(frame.filename).parent
-                break
+        if cwd:
+            self.cwd = Path(cwd)
+            assert self.cwd.exists()
         else:
-            raise Exception("Couldn't find cwd where this target is defined")
+            # Look through pymakefile for the flag that says we're a makefile
+            # this should be imported with `from pymake import *`
+
+            for frame in inspect.stack():
+                if frame.frame.f_globals.get('__FLAG_IS_PYMAKEFILE__'):
+                    self.cwd = Path(frame.filename).parent
+                    break
+            else:
+                raise Exception(
+                    "Couldn't find cwd where this target is defined.\n"
+                    "In your PyMakefile, either define `__FLAG_IS_PYMAKEFILE__ = True`,\n"
+                    "OR import it from pymake (ie `from pymake import __FLAG_IS_MAKEFILE__` or `from pymake import *`)")
 
         self.target = target if target else None
         self.deps: Dependencies = \

@@ -53,11 +53,11 @@ See [examples/hello-world](examples/hello-world) for more detail, or check out t
 - Supports `async` python code out of the box
 - Scales far better with complexity than traditional `Makefile`s
 - Fully type-hinted for a better developer experience via editor intellisense
+- Provides default implementations of targets which can be overridden:
+  - `pymake clean` - clear the cache and delete all target files.
+  - `pymake show` - displays dependencies and help from docstrings of defined targets (with default docstrings)
 - Backed by simple, extensible OOP framework
 - Callable from CLI or via python library.
-- Provides default implementations of:
-  - `pymake clean` - delete all `FileTarget.output` files and clear the cache. Can be overridden.
-  - `pymake show` - displays dependencies and help from docstrings of defined targets (with default docstrings)
 - Import, reconfigure and run targets programatically from other `PyMakefiles` within a single dependency tree.
 
 ## Caveats

@@ -1,11 +1,11 @@
-name: pybdsim-dev
+name: pymake
 
 channels:
   - defaults
   - conda-forge
 
 dependencies:
-  - python = 3.6 # support python3.6
+  - python = 3.7 # support > python3.7
   - pip = 20.03
 
   - pip:
